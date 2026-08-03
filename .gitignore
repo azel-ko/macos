@@ -1,0 +1,15 @@
+# 项目生成的虚拟磁盘与镜像
+*.img
+*.dmg
+*.fd
+*.qcow2
+*.log
+*.bak
+
+# 上游仓库(由 setup/10-fetch-osx-kvm.sh 管理)
+vendor/*
+!vendor/LOCK
+
+# 本地工具配置与缓存
+.claude/
+__pycache__/
