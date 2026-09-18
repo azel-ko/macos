@@ -6,6 +6,11 @@
 底层基于上游 [OSX-KVM](https://github.com/kholia/OSX-KVM)(版本锁定见 `vendor/LOCK`),
 本仓库提供:统一配置、自动化脚本、文档。不 fork 上游,只做包装与定制。
 
+当前实机使用的 OpenCore 引导盘修改保存在 `patches/opencore-local.patch`，
+`setup/10-fetch-osx-kvm.sh` 会在拉取上游后自动应用；重复执行会跳过已应用的补丁，
+遇到不兼容的本地修改则停止，不覆盖现有引导盘。补丁对应 `vendor/LOCK` 锁定版本，
+包含内存映射、运行时权限、CPU 拓扑及启动调试参数的修改，不包含 macOS 系统盘或用户数据。
+
 ## 使用条件
 
 > [!WARNING]
