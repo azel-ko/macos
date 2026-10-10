@@ -1,0 +1,67 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Reims local browser workload</title>
+<style>
+body { margin:24px; background:#12202c; color:#eee; font:16px system-ui; }
+canvas { width:400px; height:240px; border:1px solid #8cb; }
+#cards { display:grid; grid-template-columns:repeat(12,1fr); gap:12px; padding:20px; }
+.card { height:42px; background:linear-gradient(135deg,#339ddd,#6936b0); border-radius:8px;
+ box-shadow:0 3px 9px #0008; animation:move 2s ease-in-out infinite alternate; }
+@keyframes move { to { transform:translateY(12px) rotateY(45deg); opacity:.5; } }
+pre { white-space:pre-wrap; }
+</style>
+<h1>Local Safari rendering workload</h1>
+<p>WebGL draw/readback, animated layers and frame callback timing. No external resources.</p>
+<canvas id="gpu" width="256" height="256"></canvas><pre id="status">Starting</pre><div id="cards"></div>
+<script>
+const report = {webglPass:false, frames:0, elapsedSeconds:0};
+const started=performance.now();
+for(let i=0;i<96;i++) {
+ const card=document.createElement('div'); card.className='card';
+ card.style.animationDelay=(-i/13)+'s'; document.querySelector('#cards').appendChild(card);
+}
+let gl, program;
+try {
+ gl=document.querySelector('#gpu').getContext('webgl2');
+ if(!gl) throw new Error('WebGL2 unavailable');
+ const shader=(type,source)=>{
+  const s=gl.createShader(type); gl.shaderSource(s,source); gl.compileShader(s);
+  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s;
+ };
+ program=gl.createProgram();
+ gl.attachShader(program,shader(gl.VERTEX_SHADER,`#version 300 es
+ const vec2 p[3]=vec2[3](vec2(-1,-1),vec2(1,-1),vec2(0,1));
+ void main(){gl_Position=vec4(p[gl_VertexID],0,1);}`));
+ gl.attachShader(program,shader(gl.FRAGMENT_SHADER,`#version 300 es
+ precision highp float; out vec4 color; void main(){color=vec4(1,0,0,1);}`));
+ gl.linkProgram(program);
+ if(!gl.getProgramParameter(program,gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program));
+ gl.useProgram(program); gl.clearColor(0,0,0,1); gl.clear(gl.COLOR_BUFFER_BIT);
+ gl.drawArrays(gl.TRIANGLES,0,3);
+ const pixel=new Uint8Array(4); gl.readPixels(128,128,1,1,gl.RGBA,gl.UNSIGNED_BYTE,pixel);
+ report.pixel=Array.from(pixel); report.webglPass=report.pixel.join(',')==='255,0,0,255';
+ report.renderer=gl.getParameter(gl.RENDERER);
+ const ext=gl.getExtension('WEBGL_debug_renderer_info');
+ if(ext) report.unmaskedRenderer=gl.getParameter(ext.UNMASKED_RENDERER_WEBGL);
+} catch(e) { report.error=String(e); }
+let last=performance.now(), count=0;
+function frame(now) {
+ report.frames++; count++;
+ if(gl&&program) {gl.clearColor(0,(Math.sin(now/1000)+1)/8,.15,1); gl.clear(gl.COLOR_BUFFER_BIT); gl.drawArrays(gl.TRIANGLES,0,3);}
+ if(now-last>2000) {
+  if(gl&&program) {
+   const pixel=new Uint8Array(4); gl.readPixels(128,128,1,1,gl.RGBA,gl.UNSIGNED_BYTE,pixel);
+   report.pixel=Array.from(pixel);
+   report.webglPass=!gl.isContextLost()&&report.pixel.join(',')==='255,0,0,255';
+  }
+  report.frameCallbackHz=Number((count*1000/(now-last)).toFixed(2));
+  report.elapsedSeconds=Number(((now-started)/1000).toFixed(2));
+  document.querySelector('#status').textContent=JSON.stringify(report,null,2);
+  fetch('/metrics',{method:'POST',body:JSON.stringify(report)}).catch(()=>{});
+  count=0; last=now;
+ }
+ requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+document.querySelector('#status').textContent=JSON.stringify(report,null,2);
+</script>

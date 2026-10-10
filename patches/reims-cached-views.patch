@@ -1,0 +1,85 @@
+diff --git a/crates/reims-vgpu-config/src/lib.rs b/crates/reims-vgpu-config/src/lib.rs
+index a60d4181a408e7b3a5452e7d84cd058ccae014ae..acef320b7a252e907895f81ea174280a454c3cda 100644
+--- a/crates/reims-vgpu-config/src/lib.rs
++++ b/crates/reims-vgpu-config/src/lib.rs
+@@ -203,6 +203,11 @@ switches! {
+ /// comparable across compositing regimes and only one pair matched.
+ pub const GUEST_IMPORT: &str = "REIMS_VGPU_GUEST_IMPORT";
+ 
++/// `off` declines optional cached CPU views of surface mappings. Immediate
++/// packed-run copies and control-plane mappings remain available. This
++/// isolates long-lived aliases without disabling host GPU execution.
++pub const CACHED_VIEWS: &str = "REIMS_VGPU_CACHED_VIEWS";
++
+ /// `off` keeps descriptor state on the allocated Vulkan 1.2 set path even when
+ /// the device advertises `VK_KHR_push_descriptor` and the layout fits its
+ /// reported limit.
+diff --git a/crates/reims-vgpu/src/runtime/mapper/mod.rs b/crates/reims-vgpu/src/runtime/mapper/mod.rs
+index 835e7c90c8d0dbe121c7cb350170cd1b66cda00e..beb0fa86bafed4e02755d0af77c09bd7d64ba257 100644
+--- a/crates/reims-vgpu/src/runtime/mapper/mod.rs
++++ b/crates/reims-vgpu/src/runtime/mapper/mod.rs
+@@ -20,6 +20,7 @@ use crate::runtime::host::{HostMemory, HostOps, MemError};
+ 
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ enum MapperDecline {
++    CachedViewsDisabledByOperator,
+     CaptureMapperXregRead(MemError),
+     CaptureRequestTypeXregRead(MemError),
+     CaptureInternalXregRead(MemError),
+@@ -33,6 +34,7 @@ enum MapperDecline {
+ impl crate::observe::Decline for MapperDecline {
+     fn slug(&self) -> &'static str {
+         match self {
++            Self::CachedViewsDisabledByOperator => "mapper_cached_views_disabled_by_operator",
+             Self::CaptureMapperXregRead(_) => "mapper_capture_mapper_xreg_read",
+             Self::CaptureRequestTypeXregRead(_) => "mapper_capture_request_type_xreg_read",
+             Self::CaptureInternalXregRead(_) => "mapper_capture_internal_xreg_read",
+@@ -1960,6 +1962,21 @@ pub fn ensure_contig_view_with_pages<H: HostMemory + HostOps>(
+     host: &mut H,
+     mapping_id: u32,
+ ) -> Option<(usize, usize, std::sync::Arc<[u64]>)> {
++    let enabled = crate::config::switch(crate::config::CACHED_VIEWS) != crate::config::Switch::Off;
++    contig_view_with_policy(state, host, mapping_id, enabled)
++}
++
++fn contig_view_with_policy<H: HostMemory + HostOps>(
++    state: &mut DeviceState,
++    host: &mut H,
++    mapping_id: u32,
++    enabled: bool,
++) -> Option<(usize, usize, std::sync::Arc<[u64]>)> {
++    if !enabled {
++        crate::observe::Emit::decline("mapper", &MapperDecline::CachedViewsDisabledByOperator)
++            .fail_once(0);
++        return None;
++    }
+     // Always revalidate before returning a cached contig (ReplacePhysical /
+     // recycle must not leave a live view over freelist PFNs).
+     if !revalidate_mapping_pages(state, host, mapping_id) {
+diff --git a/crates/reims-vgpu/src/runtime/mapper/tests.rs b/crates/reims-vgpu/src/runtime/mapper/tests.rs
+index 4458cb30aca55ec1ff683c2548c4e193568e90b1..6dfacf5c84062a42abb8f816e1085683c036742b 100644
+--- a/crates/reims-vgpu/src/runtime/mapper/tests.rs
++++ b/crates/reims-vgpu/src/runtime/mapper/tests.rs
+@@ -7,6 +7,22 @@
+ 
+ use super::selected_within;
+ 
++#[test]
++fn disabled_cached_views_cannot_return_an_existing_pointer() {
++    use crate::model::{DeviceId, PAGE_SHIFT_X86};
++    use crate::runtime::host::FakeHost;
++    let mut host = FakeHost::new();
++    let mut state = crate::model::DeviceState::new(DeviceId(1), PAGE_SHIFT_X86);
++    state.map_surface(6);
++    let m = state.mappings.get_mut(&6).unwrap();
++    // A sentinel, never dereferenced: the policy must reject before consulting
++    // cached memory. It must not mutate or release a view behind its owner.
++    m.contig_ptr = 0x1000;
++    m.contig_len = 4096;
++    assert!(super::contig_view_with_policy(&mut state, &mut host, 6, false).is_none());
++    assert_eq!(state.mappings.get(&6).unwrap().contig_ptr, 0x1000);
++}
++
+ fn sel(ranges: Option<&[(u64, u64)]>, lo: u64, hi: u64) -> Vec<(u64, u64)> {
+     selected_within(ranges, lo, hi).collect()
+ }

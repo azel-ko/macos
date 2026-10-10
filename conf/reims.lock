@@ -1,0 +1,7 @@
+{
+  "reims_vgpu": "69a57dd69a6958e946c03b73e02db331f330f435",
+  "qemu": "bd88218da09b86ed9c78bf5f9354168812a7ba6b",
+  "metal2vulkan": "9e0e99a41dc3cb8bb7e288b531f1698a79fd4b1c",
+  "rust": "1.99.0",
+  "local_patch": "patches/reims-cached-views.patch"
+}

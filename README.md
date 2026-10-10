@@ -49,6 +49,13 @@
 - Linux Mint + KVM，macOS Sonoma 14.8.8 安装和启动成功
 - Raptor Lake Iris Xe 没有可用的 macOS 图形加速驱动，因此保持软件渲染
 
+独立的 [Reims 虚拟 GPU 实验](docs/REIMS-GPU.md) 已打通
+macOS Metal → AppleParavirtGPU → Reims → Vulkan → Iris Xe。
+使用独立 OpenCore 内存配置后，两次全新启动均通过 10 分钟 Safari 负载，
+未观察到内核崩溃；图形会话中的默认 Metal 设备及计算、渲染、回读也通过验证。
+这仍是 Alpha 实验：IntelliJ 默认绘制出现花屏，视频硬解和长期日用尚未验收。
+普通启动脚本仍使用软件渲染；实验启动和验证方法见上述文档。
+
 ## 虚拟机配置(conf/vm.env)
 
 macOS **Sonoma 14** / 8GB RAM / 4 vCPU / 64MB 显存 / 256GB qcow2(稀疏)/ NAT + SSH 端口转发 2222
@@ -88,17 +95,23 @@ bash setup/40-boot-macos.sh    # ⑤ 启动虚拟机,默认弹出本地 GTK 窗�
   `vendor/OSX-KVM/BaseSystem.img` 可释放约 3GB，启动脚本会自动跳过安装介质。
 - 关机状态下备份系统盘：
   `cp vendor/OSX-KVM/mac_hdd_ng.img vendor/OSX-KVM/mac_hdd_ng.img.bak`
-- 后续日常启动只需：`bash setup/40-boot-macos.sh`
+- 后续日常启动：`ATTACH_INSTALL_MEDIA=0 bash setup/40-boot-macos.sh`
+  默认 XHCI 绝对定位鼠标；兼容性排错可用 `VM_POINTER=mouse` 回退。
 
 ## 性能预期(诚实版)
 
+2026-10-10 用户反馈当前桌面严重卡顿。下表为使用范围，不代表本机已经通过
+流畅度验收；无 GPU 加速的性能上限仍然存在。
+
 | 场景 | 体验 |
 |---|---|
-| 命令行/编译/SSH | 接近原生 |
-| 日常 GUI 应用(浏览器、办公软件) | 可用,动画有卡顿感 |
+| 命令行/编译/SSH | SSH 和命令执行已验证；编译性能未做基准测试 |
+| 日常 GUI 应用(浏览器、办公软件) | 基础点击、输入和滚动已验证；复杂网页、办公及 IDE 负载待验收 |
 | 视频播放/3D/大型图形应用 | 较差；软件渲染模式不适合 |
 
 ## 路线图
+
+日常调优方法见 [排错指南](docs/TROUBLESHOOTING.md#桌面非常卡顿)。
 
 - [x] P0 脚本化搭建 + 软件渲染 VM(当前)
 - [ ] P1 安装后优化:SSH、共享文件夹(SMB)、分辨率、快照脚本

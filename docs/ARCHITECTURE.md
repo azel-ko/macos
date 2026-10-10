@@ -41,23 +41,26 @@ macOS 各版本的 CPU 仿真参数。fork 会失去上游修复( macOS 更新�
 (serial 日志实证)——混合架构宿主上报的拓扑让 XNU 算出 0 做除数。
 4 vCPU(cores=4,threads=1)绕开。想加核需逐个验证,别一次跳太多。
 
-**输入设备:EHCI + usb-mouse 的两个坑**
-- OpenCore/OVMF 引导阶段**没有 XHCI 驱动**:usb-kbd 挂 xhci 则引导菜单
-  键盘全死。键鼠挂 EHCI 后引导菜单和 macOS 内都正常
-- `usb-tablet` 在 HID 描述符里是**数字化仪**,macOS 当绘图板处理、不驱动
-  光标;必须用 `usb-mouse`(相对坐标)。相对坐标 + macOS 指针加速会让
-  自动化脚本 overshoot,小步慢走(≤12px/步)规避
+**输入设备:EHCI 引导键盘 + XHCI 绝对定位**
+- 本机引导阶段使用 EHCI 键盘，避免固件阶段的 XHCI 兼容问题。
+- macOS 内默认使用挂在 `xhci.0` 的 `usb-tablet`。Sonoma 14.8.8 已实测
+  坐标定位、点击、输入及滚动正常，减少相对鼠标加速和光标不同步的问题。
+- 默认不同时启用相对 USB 鼠标，避免它在启动时抢占 GTK 的当前指针模式。
+  QEMU 8.2.2 的 tablet 描述符使用 Generic Desktop / Mouse；此前将其称作
+  不驱动光标的数字化仪不准确。`VM_POINTER=mouse` 可回退到 EHCI 相对定位。
 
 **显示模式选择**
 本地使用默认 `-display gtk`,减少 VNC 编解码和传输带来的交互延迟。
+GTK 默认 `gl=on`，使用宿主机 GPU 呈现窗口；来宾仍是软件渲染。
 需要后台常驻或脚本化截图时可用 `DISPLAY_MODE=vnc` 临时切换到
 VNC 无头模式(127.0.0.1:5901);关闭查看器不会杀死虚拟机。
 
 **为什么先软件渲染**
 开发机只有 Raptor Lake Iris Xe 单核显，macOS 没有适用的图形驱动；即使直通也
 无法提供正常的 Metal 加速，而且单 GPU 直通会导致宿主机失去显示。
-`vmware-svga` 设备有 macOS 原生驱动，是无直通下的可用显示方案，但没有
-Metal 加速 → 窗口合成走 CPU，动画会卡顿。
+当前 `vmware-svga` 通过 framebuffer 提供基本显示；来宾实测报告
+`No Kext Loaded`，不能据虚拟设备名称宣称已加载 VMware 图形驱动。
+没有 Metal 加速，窗口合成依赖 CPU，动画和复杂图形仍受限。
 
 **网络选型**
 user-mode NAT(slirp)零配置、无需 root,hostfwd 提供 SSH 通道。

@@ -1,0 +1,8 @@
+{
+  "booter_quirks": {
+    "EnableWriteUnprotector": true,
+    "RebuildAppleMemoryMap": false,
+    "SyncRuntimePermissions": false,
+    "ProvideCustomSlide": false
+  }
+}

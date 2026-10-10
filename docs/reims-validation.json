@@ -1,0 +1,115 @@
+{
+  "date": "2026-10-10",
+  "host": {
+    "cpu": "Intel i5-13500H",
+    "gpu": "Intel Iris Xe RPL-P 8086:a7a0",
+    "ram_gib": 31,
+    "mesa": "25.2.8",
+    "vulkan_device_api": "1.4.318"
+  },
+  "guest": {
+    "os": "macOS Sonoma 14.8.8 (23J620)",
+    "ram_mib": 8192,
+    "vcpus": 4
+  },
+  "source_pins": {
+    "reims_vgpu": "69a57dd69a6958e946c03b73e02db331f330f435",
+    "qemu": "bd88218da09b86ed9c78bf5f9354168812a7ba6b",
+    "metal2vulkan": "9e0e99a41dc3cb8bb7e288b531f1698a79fd4b1c",
+    "rust": "1.99.0",
+    "local_patch": "patches/reims-cached-views.patch"
+  },
+  "booter_quirks": {
+    "EnableWriteUnprotector": true,
+    "RebuildAppleMemoryMap": false,
+    "SyncRuntimePermissions": false,
+    "ProvideCustomSlide": false
+  },
+  "runs": [
+    {
+      "id": "run-JW4LHbNB",
+      "config": {
+        "graphics_device": "reims-vgpu-pci",
+        "ram_backend": "memfd",
+        "opencore_sha256": "5e75c0247af5e927e0363972c69664e060163d3fe610d9bd614c7493f52240b9",
+        "source_patch_sha256": "e394cb34c4c56ad89a30b3b023e0b85b80ccbfd5adea0e9b3c700b6e50e33922",
+        "qemu_sha256": "ad3dad5c6a04a2fbc1b5ea6e82986206254798c6440dbd0f9c5fe1c7d163eb99",
+        "switches": {
+          "REIMS_VGPU_WINDOW": "1",
+          "REIMS_VGPU_BACKEND": "vulkan",
+          "REIMS_VGPU_GUEST_IMPORT": "off"
+        }
+      },
+      "opencore_config_sha256": "c5932abce1e2dc1229ee23b71cd23c4634b53cc3bf5e7773d4ab050963218359",
+      "browser": {
+        "pass": true,
+        "seconds": 600.02,
+        "reports": 298,
+        "health_samples": 20,
+        "kernel_panic": false,
+        "probe_sha256": null,
+        "scope": "initial readback; continuous animation/health"
+      },
+      "default_gui_metal_pass": true,
+      "metal_compute_render_readback_pass": true,
+      "host_iris_xe_selected": true,
+      "clean_guest_shutdown": true
+    },
+    {
+      "id": "run-hhaCQbNz",
+      "config": {
+        "graphics_device": "reims-vgpu-pci",
+        "ram_backend": "memfd",
+        "opencore_sha256": "8071e1a69738ac91ddb5e0111994b31f3ec3eed43e78ce637def240cbe18db0c",
+        "source_patch_sha256": "e394cb34c4c56ad89a30b3b023e0b85b80ccbfd5adea0e9b3c700b6e50e33922",
+        "qemu_sha256": "ad3dad5c6a04a2fbc1b5ea6e82986206254798c6440dbd0f9c5fe1c7d163eb99",
+        "switches": {
+          "REIMS_VGPU_WINDOW": "1",
+          "REIMS_VGPU_BACKEND": "vulkan",
+          "REIMS_VGPU_GUEST_IMPORT": "off"
+        }
+      },
+      "opencore_config_sha256": "c5932abce1e2dc1229ee23b71cd23c4634b53cc3bf5e7773d4ab050963218359",
+      "browser": {
+        "pass": true,
+        "seconds": 600.69,
+        "reports": 298,
+        "health_samples": 21,
+        "kernel_panic": false,
+        "probe_sha256": "09e0595abb5f30c22a6f30b411e98c961829861bc43ba715b447096a09251ba3",
+        "scope": "readback repeated for every report"
+      },
+      "default_gui_metal_pass": true,
+      "metal_compute_render_readback_pass": true,
+      "host_iris_xe_selected": true,
+      "clean_guest_shutdown": true
+    }
+  ],
+  "verification": {
+    "python_tests_passed": 36,
+    "rust_mapper_tests_passed": 34,
+    "rust_config_tests_passed": 15,
+    "rustfmt": "passed",
+    "clippy": "passed with 28 pre-existing warnings",
+    "bash_syntax": "passed",
+    "python_compile": "passed"
+  },
+  "limitations": [
+    "Two ten-minute browser runs are not multi-hour stability validation.",
+    "IntelliJ IDEA editor rendering is corrupted; separate Java2D Metal/OpenGL disable overrides did not fix it.",
+    "Safari initial painting can be incorrect before a repaint.",
+    "Full Metal conformance and hardware video decoding are unverified.",
+    "Animation callback rate is not displayed FPS.",
+    "The four-setting OpenCore comparison does not isolate one quirk or every upstream panic root cause.",
+    "The cached-views patch is diagnostic, not the stability fix.",
+    "The first browser probe source hash was not recorded."
+  ],
+  "final_launcher_smoke": {
+    "id": "run-gTADRHp0",
+    "default_profile": "osx-kvm-memory",
+    "metal_compute_render_readback_pass": true,
+    "default_gui_metal_pass": true,
+    "host_iris_xe_selected": true,
+    "scope": "Fresh boot after final launcher teardown fix; no additional ten-minute workload."
+  }
+}
