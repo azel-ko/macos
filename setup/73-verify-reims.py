@@ -29,6 +29,21 @@ def engine_times(pid):
     return counters
 
 
+def drm_devices(pid):
+    devices = {}
+    for descriptor in Path(f"/proc/{pid}/fd").glob("*"):
+        try:
+            target = descriptor.readlink()
+            if target.parent != Path("/dev/dri") or not target.name.startswith("renderD"):
+                continue
+            pci = Path("/sys/class/drm") / target.name / "device"
+            devices[target.name] = {"node": str(target), "vendor": (pci / "vendor").read_text().strip(),
+                                    "device": (pci / "device").read_text().strip()}
+        except OSError:
+            continue
+    return list(devices.values())
+
+
 def verify():
     run = identified_run(ROOT / "vendor/reims-lab/runtime/current")
     pid = int((run / "qemu.pid").read_text())
@@ -54,9 +69,12 @@ def verify():
     except json.JSONDecodeError:
         guest = {"pass": False, "error": "Probe did not return JSON; see metal-smoke.stderr"}
     maps = Path(f"/proc/{pid}/maps").read_text()
-    log = Path("/tmp/reims-vgpu-fail.log").read_text(errors="replace")
+    config = json.loads((run / "config.json").read_text())
+    log_path = run / "qemu.log" if config.get("stack") == "beta" else Path("/tmp/reims-vgpu-fail.log")
+    log = log_path.read_text(errors="replace")
     caps = [line for line in log.splitlines() if "vk_caps " in line]
-    intel = "libvulkan_intel.so" in maps and any("Iris" in line for line in caps)
+    devices = drm_devices(pid)
+    intel = "libvulkan_intel.so" in maps and any(d["vendor"] == "0x8086" and d["device"] == "0xa7a0" for d in devices)
     delta = {client: {engine: ns - before.get(client, {}).get(engine, ns)
                       for engine, ns in values.items()} for client, values in after.items()}
     result = {
@@ -64,6 +82,7 @@ def verify():
         "guest": guest, "guest_exit_code": probe.returncode,
         "host_intel_vulkan_driver_loaded": "libvulkan_intel.so" in maps,
         "host_iris_xe_selected": intel, "host_vk_caps": caps,
+        "host_drm_devices": devices,
         "host_drm_engine_delta_ns": delta,
         "elapsed_seconds_including_compile": round(time.monotonic() - started, 3),
         "probe_source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),

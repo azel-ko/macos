@@ -1,0 +1,264 @@
+diff --git a/crates/metal2vulkan-runtime/src/depth_copy.rs b/crates/metal2vulkan-runtime/src/depth_copy.rs
+index ca40777818fc41c56f0163cd610440c3d86492b3..93f619aa2ff68ecad3ef2f6dfedba25a27f53e05 100644
+--- a/crates/metal2vulkan-runtime/src/depth_copy.rs
++++ b/crates/metal2vulkan-runtime/src/depth_copy.rs
+@@ -18,7 +18,8 @@
+ //!   on a driver whose fragment depth stores each code's fetched `float` as that code
+ //!   (`fragment_depth_keeps_every_16_bit_code` probes every code; the fact
+ //!   [`DriverFact::FragmentDepthKeepsDepth16Codes`]). Where the driver is measured to change some
+-//!   values of a 32-bit float depth ([`fragment_depth_changes`]: MoltenVK, NVIDIA's), the draw runs
++//!   values of a 32-bit float depth ([`fragment_depth_changes`]: MoltenVK, NVIDIA's, and the
++//!   measured Iris Xe / Mesa 25.2.8 identity), the draw runs
+ //!   as an announced near-equivalent (`drawn-depth-copy`, [`drawn`]): a blit copy into such a
+ //!   depth, and the separate textures' depth copies. Elsewhere the draw is not used and its
+ //!   consumer refuses, typed.
+@@ -142,13 +143,64 @@ const FRAGMENT_DEPTH_CHANGES: &[(DriverId, &str)] = &[
+ /// The values the `FragDepth` draw changes on `device`'s driver, where they are measured
+ /// ([`FRAGMENT_DEPTH_CHANGES`]); `None` where they are not.
+ fn fragment_depth_changes(device: &Device) -> Option<&'static str> {
+-    let driver = device.properties().description.driver_id?;
++    let description = &device.properties().description;
++    fragment_depth_changes_for(
++        description.driver_id,
++        description.driver_version,
++        description.vendor_id,
++        description.device_id,
++    )
++}
++
++fn fragment_depth_changes_for(
++    driver: Option<DriverId>,
++    version: u32,
++    vendor: u32,
++    device: u32,
++) -> Option<&'static str> {
++    let driver = driver?;
++    if (driver, version, vendor, device)
++        == (DriverId::INTEL_OPEN_SOURCE_MESA, 0x06402008, 0x8086, 0xa7a0)
++    {
++        // Measured on this exact ANV identity with per-sample buffer upload and
++        // readback: 32 patterns spanning zeros, subnormals, normal unit depths,
++        // out-of-range values, infinities and signed NaN payloads. Do not extend
++        // this record to another GPU or driver release without measuring it.
++        return Some("on Iris Xe RPL-P / ANV Mesa 25.2.8, negative zero, negative values, subnormals and NaNs become +0; values above 1 and +inf become 1; normal finite depths in [0, 1] are kept");
++    }
+     FRAGMENT_DEPTH_CHANGES
+         .iter()
+         .find(|(of, _)| *of == driver)
+         .map(|(_, changes)| *changes)
+ }
+ 
++#[cfg(test)]
++mod local_intel_tests {
++    use super::*;
++
++    #[test]
++    fn only_the_measured_anv_identity_uses_the_local_depth_route() {
++        let driver = Some(DriverId::INTEL_OPEN_SOURCE_MESA);
++        assert!(fragment_depth_changes_for(driver, 0x06402008, 0x8086, 0xa7a0).is_some());
++        for (version, vendor, device) in [
++            (0x06402007, 0x8086, 0xa7a0),
++            (0x06402009, 0x8086, 0xa7a0),
++            (0x06402008, 0x1002, 0xa7a0),
++            (0x06402008, 0x8086, 0x46a6),
++        ] {
++            assert!(fragment_depth_changes_for(driver, version, vendor, device).is_none());
++        }
++        assert!(fragment_depth_changes_for(None, 0x06402008, 0x8086, 0xa7a0).is_none());
++        assert!(fragment_depth_changes_for(
++            Some(DriverId::MESA_LLVMPIPE),
++            0x06402008,
++            0x8086,
++            0xa7a0
++        )
++        .is_none());
++    }
++}
++
+ /// Announce `drawn-depth-copy` once for `what`, a copy whose `FragDepth` draw changes the values
+ /// `changes` names ([`Drawn::Changes`]): the one notice of every copy the draw makes inexactly,
+ /// a blit copy into a multisampled depth and a pass's separate depth texture's copies to and from
+diff --git a/crates/metal2vulkan-runtime/src/render.rs b/crates/metal2vulkan-runtime/src/render.rs
+index c3dc19db09b3a454a503e31194a0efbfda52dd7c..9fb51691e88fa781f7c26cc283cca8f9c37969b7 100644
+--- a/crates/metal2vulkan-runtime/src/render.rs
++++ b/crates/metal2vulkan-runtime/src/render.rs
+@@ -3452,7 +3452,7 @@ impl RenderCommandEncoder {
+             true => None,
+             false => StandInCopies::plan_aspects(
+                 &scratch(&|index, c| {
+-                    stored(c) && !loaded(index, c) && c.stand_in.as_ref().is_some_and(&over_bytes)
++                    stored(c) && !loaded(index, c) && c.stand_in.as_ref().is_some_and(over_bytes)
+                 }),
+                 false,
+             )?,
+diff --git a/crates/metal2vulkan-runtime/src/sampler.rs b/crates/metal2vulkan-runtime/src/sampler.rs
+index c976890cb34f817fc4ef74d9bdb9fa7414d0988e..05647fad484cf67c4cd95d6fff32907673a402d9 100644
+--- a/crates/metal2vulkan-runtime/src/sampler.rs
++++ b/crates/metal2vulkan-runtime/src/sampler.rs
+@@ -164,7 +164,7 @@ impl SamplerCount {
+     /// Count one more live sampler, or refuse it where `limit` are live.
+     pub(super) fn take(&self) -> Result<(), Error> {
+         self.live
+-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |live| {
++            .try_update(Ordering::AcqRel, Ordering::Acquire, |live| {
+                 (live < self.limit).then_some(live + 1)
+             })
+             .map(|_| ())
+diff --git a/crates/metal2vulkan-runtime/src/tests/multisample_buffer_copy.rs b/crates/metal2vulkan-runtime/src/tests/multisample_buffer_copy.rs
+index 3a973bfa0badcbcc7b280b61448b0445a2d601e3..9ebc23da74c6c75c65067ca18ed8ce82b4ab115f 100644
+--- a/crates/metal2vulkan-runtime/src/tests/multisample_buffer_copy.rs
++++ b/crates/metal2vulkan-runtime/src/tests/multisample_buffer_copy.rs
+@@ -269,3 +269,112 @@ fn a_blit_between_a_buffer_and_a_multisampled_texture_round_trips_per_sample() {
+     // the test proved nothing, so fail rather than pass vacuously.
+     assert!(ran > 0, "the device ran no multisampled buffer copy");
+ }
++#[cfg(m2v_gpu)]
++mod intel_depth {
++    use crate::{
++        BlitOption, CommandBufferStatus, Device, DeviceKind, DeviceOptions, Origin,
++        ResourceOptions, Size, TextureDescriptor,
++    };
++    use metal2vulkan::metal::{PixelFormat, TextureType, TextureUsage};
++    use std::time::Duration;
++
++    #[test]
++    fn iris_xe_mesa_25_2_8_multisampled_depth_upload() {
++        let device = Device::system_default_with(&DeviceOptions {
++            kinds: vec![DeviceKind::Integrated],
++            ..DeviceOptions::default()
++        })
++        .unwrap();
++        let description = &device.properties().description;
++        assert_eq!(
++            (
++                description.vendor_id,
++                description.device_id,
++                description.driver_version
++            ),
++            (0x8086, 0xa7a0, 0x06402008),
++            "This measurement requires the declared local driver"
++        );
++        let bits: [u32; 32] = [
++            0, 0x80000000, 1, 0x80000001, 0x007fffff, 0x807fffff, 0x00800000, 0x80800000,
++            0x3e800000, 0x3f000000, 0x3f400000, 0x3f800000, 0xbf000000, 0x40000000, 0x7f800000,
++            0xff800000, 0x7fc00000, 0xffc00000, 0x7fc12345, 0xffc12345, 0x3f000001, 0x3effffff,
++            0x3f7fffff, 0x00800001, 0x00010000, 0x80010000, 0x3c000000, 0x3d000000, 0x7f7fffff,
++            0xff7fffff, 0x7f800001, 0xff800001,
++        ];
++        let bytes: Vec<u8> = bits.iter().flat_map(|n| n.to_le_bytes()).collect();
++        let source = device
++            .new_buffer_with_bytes(&bytes, ResourceOptions::shared())
++            .unwrap();
++        let output = device
++            .new_buffer_with_bytes(&vec![0; bytes.len()], ResourceOptions::shared())
++            .unwrap();
++        let mut descriptor = TextureDescriptor::texture_2d(PixelFormat::Depth32Float, 8, 1, false);
++        descriptor.texture_type = TextureType::Type2DMultisample;
++        descriptor.sample_count = 4;
++        descriptor.usage = TextureUsage::RENDER_TARGET | TextureUsage::SHADER_READ;
++        descriptor.resource_options = ResourceOptions::private();
++        let texture = device.new_texture(&descriptor).unwrap();
++        let queue = device.new_command_queue().unwrap();
++        let command = queue.command_buffer().unwrap();
++        let mut blit = command.blit_command_encoder().unwrap();
++        blit.copy_from_buffer_to_texture(
++            &source,
++            0,
++            128,
++            128,
++            Size::new(8, 1, 1),
++            &texture,
++            0,
++            0,
++            Origin::new(0, 0, 0),
++            BlitOption::None,
++        )
++        .expect("the guest's depth upload must run");
++        blit.end_encoding().unwrap();
++        command.commit().unwrap();
++        command
++            .wait_until_completed_for(Duration::from_secs(30))
++            .unwrap();
++        assert_eq!(command.status(), CommandBufferStatus::Completed);
++        let command = queue.command_buffer().unwrap();
++        let mut blit = command.blit_command_encoder().unwrap();
++        blit.copy_from_texture_to_buffer(
++            &texture,
++            0,
++            0,
++            Origin::new(0, 0, 0),
++            Size::new(8, 1, 1),
++            &output,
++            0,
++            128,
++            128,
++            BlitOption::None,
++        )
++        .unwrap();
++        blit.end_encoding().unwrap();
++        command.commit().unwrap();
++        command
++            .wait_until_completed_for(Duration::from_secs(30))
++            .unwrap();
++        assert_eq!(command.status(), CommandBufferStatus::Completed);
++        // SAFETY: the shared output buffer is live, holds 128 bytes, and both copies completed.
++        let read = unsafe { std::slice::from_raw_parts(output.contents().unwrap().as_ptr(), 128) };
++        for (index, (input, output)) in bits.iter().zip(read.chunks_exact(4)).enumerate() {
++            let actual = u32::from_le_bytes(output.try_into().unwrap());
++            eprintln!("INTEL_DEPTH sample={index} input={input:#010x} actual={actual:#010x}");
++            let value = f32::from_bits(*input);
++            let expected = if value.is_nan() || value.is_sign_negative() || value.is_subnormal() {
++                0
++            } else if value > 1.0 {
++                1.0f32.to_bits()
++            } else {
++                *input
++            };
++            assert_eq!(
++                actual, expected,
++                "measured depth-copy result at sample {index}"
++            );
++        }
++    }
++}
+diff --git a/crates/metal2vulkan/src/lower/simd/lockstep.rs b/crates/metal2vulkan/src/lower/simd/lockstep.rs
+index d1350befe9e596b087f5415eb99000fb9cc3080a..d74b01f20ef17692390e0e7a84cb0f986682551f 100644
+--- a/crates/metal2vulkan/src/lower/simd/lockstep.rs
++++ b/crates/metal2vulkan/src/lower/simd/lockstep.rs
+@@ -372,7 +372,7 @@ impl Shape<'_> {
+                     fh.sum.iter().any(|&(u, home)| {
+                         self.us.is_uniform_value(self.e, u)
+                             && fl.below.contains(&(kl, u, ga.signed))
+-                            && (!cross || home.is_none_or(&invariant))
++                            && (!cross || home.is_none_or(invariant))
+                     })
+                 };
+                 let past = |o1: i64, o2: i64, s2: u64| {
+diff --git a/docs/API.md b/docs/API.md
+index 12ef6dcad2930ee3d46e80021aecd4d1e3a90c02..ec1e09715e53b82b2ad8224f622ec58e3f629f42 100644
+--- a/docs/API.md
++++ b/docs/API.md
+@@ -1197,7 +1197,10 @@ fast forms record, and each `PrecisionNote`'s rustdoc states its bound.
+   multisampled 32-bit float depth texture from a colour one, or a render pass's separate
+   multisampled 32-bit float depth texture copied to and from its scratch image, by the sample-rate
+   `FragDepth` draw, on a device whose copies go by draws and whose driver's fragment depth is
+-  measured to change some values (`depth_copy::drawn`: MoltenVK, NVIDIA's). Cost: each sample's
++  measured to change some values (`depth_copy::drawn`: MoltenVK, NVIDIA's, and Intel Iris Xe
++  RPL-P `8086:a7a0` with Mesa driver version `0x06402008`, 25.2.8). On that Intel identity,
++  negative zero, negative values, subnormals and NaNs become +0; values above one and positive
++  infinity become one; the measured normal finite unit depths are kept. Cost: each sample's
+   depth is written by a fragment-depth draw, where Metal copies its bytes: the values the driver's
+   fragment depth changes, which the reason names, land changed; every other value lands as Metal's
+   copy leaves it.
+diff --git a/docs/FAST-PATHS.md b/docs/FAST-PATHS.md
+index 7e840a1ac23145957de556e33684053d1082d95d..ecd9d316b20e2b49c6b0ba28bc1a98dbf93bd700 100644
+--- a/docs/FAST-PATHS.md
++++ b/docs/FAST-PATHS.md
+@@ -59,6 +59,7 @@ known. The rest of the differences are docs/API.md section 9's precision notes.
+ | `f32` denormals in operations left to the device (a remainder, a `double` conversion, `dot`'s fused sum, a function no routine computes): Metal reads them as zero. | Vulkan lets each device keep or flush them. `+ - *`, comparisons, `fma`, `sqrt`, `rsqrt`, `floor`, `ceil` and divisions read them as Metal on every device. | `DeviceDenormals` (`device-denormals`) |
+ | A denormal 32-bit float texel the device's sample or gather reads as zero (RADV's gathers and nearest samples, NVIDIA's gathers, ANV's nearest samples), where the module cannot fetch the texels itself. | The device's filter decides; no fetch form reaches filtered, cube, heap or runtime-sampler samples. | `DeviceTexelDenormals` (`device-texel-denormals`) |
+ | Depth values outside [0, 1] stored clamped (RADV, ANV) on a device without `VK_EXT_depth_range_unrestricted`. | Vulkan leaves them undefined without the extension: enable it. | `RestrictedDepthRange` (`restricted-depth-range`) |
++| Multisampled 32-bit float depth copies through a fragment-depth draw on Intel Iris Xe RPL-P `8086:a7a0`, Mesa 25.2.8 (`0x06402008`): negative zero, negatives, subnormals and NaNs become +0; values above one and positive infinity become one. | This driver lacks maintenance8; no exact transfer route is available. The local record is restricted to this measured identity and 32 authored per-sample patterns; other identities retain their existing refusal or measured route. | `DrawnDepthCopy` (`drawn-depth-copy`) |
+ | Signed zeros, infinities and NaNs where the device lacks `SignedZeroInfNanPreserve` at the operation's width. | A device capability. | `DeviceSignedZeroInfNan` (`device-signed-zero-inf-nan`) |
+ | NVIDIA's interpolation rounds an exactly representable varying one `f32` ulp toward zero. | The exact path needs Metal's interpolation formula, which is not measured. | `DeviceInterpolation` (`device-interpolation`) |
+ | A fast-math function's `half` color into a blend: within three `half` ulps (16-bit float) or two `float` ulps (32-bit float). | Metal's compiler regroups the blend per pipeline; no form the function and the blend state decide is Metal's. | `HalfOutputFastMathBlend` (`half-output-fast-math-blend`) |

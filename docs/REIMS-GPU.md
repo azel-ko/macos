@@ -1,5 +1,10 @@
 # Iris Xe virtual GPU experiment
 
+This page records the 2026-10-10 Alpha experiment. The subsequent IntelliJ
+investigation and independent Beta build are in [INTELLIJ-GPU.md](INTELLIJ-GPU.md).
+The Alpha run left running later panicked at about 70 minutes; its two bounded
+600-second browser passes do not establish long-term stability.
+
 This lab uses the existing x86 macOS Sonoma 14.8.8 installation. It does not
 install a second macOS release or replace the normal system QEMU.
 

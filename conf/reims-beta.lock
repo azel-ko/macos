@@ -1,0 +1,8 @@
+{
+  "reims_vgpu": "9b2c5452de94a474cba28d80d7f99d9d7b19ffe3",
+  "qemu": "1a72df984914fb9929d35b1217619178133d65a4",
+  "metal2vulkan": "13b279df1bf87893d389f955a90c55b6ff3d0f9b",
+  "rust": "1.99.0",
+  "local_patch": "patches/reims-beta-runtime.patch",
+  "metal2vulkan_patch": "patches/reims-beta-intel-depth.patch"
+}

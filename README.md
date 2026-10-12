@@ -51,17 +51,22 @@
 
 独立的 [Reims 虚拟 GPU 实验](docs/REIMS-GPU.md) 已打通
 macOS Metal → AppleParavirtGPU → Reims → Vulkan → Iris Xe。
-使用独立 OpenCore 内存配置后，两次全新启动均通过 10 分钟 Safari 负载，
-未观察到内核崩溃；图形会话中的默认 Metal 设备及计算、渲染、回读也通过验证。
-这仍是 Alpha 实验：IntelliJ 默认绘制出现花屏，视频硬解和长期日用尚未验收。
-普通启动脚本仍使用软件渲染；实验启动和验证方法见上述文档。
+Alpha 曾通过两次 10 分钟 Safari 负载，但继续运行约 70 分钟后出现 IPI 超时崩溃，
+IntelliJ 仍有黑块和蓝色杂点。2026-10-12 的独立 Beta 对照已能正确显示
+IntelliJ LightEdit，滚动、输入和保存通过，JBR Java2D 六色画面及 Metal 计算、
+渲染、回读也通过验证。Beta 一轮持续负载触发宿主 i915 GPU hang，另一次加载
+校验层的 10 分钟负载通过；挂起原因尚未定位，Beta 保持实验状态。
+普通启动脚本保持软件渲染；实验入口默认保留 Alpha，Beta 需显式设置
+`REIMS_STACK=beta`。构建、测试、结果和剩余限制见
+[IntelliJ 图形验证](docs/INTELLIJ-GPU.md)。视频硬解和长期日用尚未验收。
 
 ## 虚拟机配置(conf/vm.env)
 
 macOS **Sonoma 14** / 8GB RAM / 4 vCPU / 64MB 显存 / 256GB qcow2(稀疏)/ NAT + SSH 端口转发 2222
 
 > vCPU 数量是排错结论:Raptor Lake 宿主上 6 vCPU 会触发 XNU 拓扑
-> divide error panic,4 vCPU 稳定。详见 `docs/TROUBLESHOOTING.md`。
+> divide error panic；4 vCPU 已通过启动验证，实验 GPU 的长期稳定性仍待解决。
+> 详见 `docs/TROUBLESHOOTING.md`。
 
 ## 快速开始
 

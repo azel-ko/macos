@@ -1,0 +1,179 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-12",
+  "host": {
+    "cpu": "Intel Core i5-13500H",
+    "gpu": "Iris Xe RPL-P",
+    "pci_id": "8086:a7a0",
+    "mesa": "25.2.8",
+    "driver_version": "0x06402008",
+    "device_api": "1.4.318",
+    "display_server": "X11"
+  },
+  "guest": {
+    "macos": "Sonoma 14.8.8 (23J620)",
+    "ram_mib": 8192,
+    "vcpus": 4,
+    "resolution": [
+      1920,
+      1080
+    ],
+    "disk_policy": "Independent overlays of the read-only base; original disk and Alpha checkout preserved"
+  },
+  "source_pins": {
+    "reims_vgpu": "9b2c5452de94a474cba28d80d7f99d9d7b19ffe3",
+    "qemu": "1a72df984914fb9929d35b1217619178133d65a4",
+    "metal2vulkan": "13b279df1bf87893d389f955a90c55b6ff3d0f9b",
+    "rust": "1.99.0",
+    "local_patch": "patches/reims-beta-runtime.patch",
+    "metal2vulkan_patch": "patches/reims-beta-intel-depth.patch"
+  },
+  "final_build_hashes": {
+    "source_patch_sha256": "8effed58627520a563b26d09ded393e9f16c88e86590aa59ab7d6e05aad1627f",
+    "metal2vulkan_patch_sha256": "d604cb655340e5e96fe6f4e081ce42468dc456738021a10761f4ec7f612d54d2",
+    "qemu_sha256": "7e532ec7d654db064cfbcdd2bc8b0224154d1010b38630dad39f6387f6af45fa",
+    "rom_sha256": "49193364eb3d37de0009000c556d6a8c58d1a998269216d549971bf10a9790fd"
+  },
+  "control": {
+    "run": "run-Qhr3AJO3",
+    "stack": "legacy Alpha",
+    "lightedit_visual_pass": false,
+    "observed": "Black editor regions and blue specks"
+  },
+  "historical_long_run": {
+    "run": "run-gTADRHp0",
+    "stack": "legacy Alpha",
+    "panic_uptime_seconds": 4179.26,
+    "panic_kind": "IPI timeout in pmap.c",
+    "cause_isolated": false
+  },
+  "unpatched_beta": {
+    "run": "run-S3LIsJaD",
+    "qemu_sha256": "61b92c5e541e11c7e2ec59b45af9bfd9c1e7bbf3436f7a15b96d9f6b885c0f27",
+    "desktop_reached": false,
+    "refusal": "NotImplemented(MultisampledBufferCopy)",
+    "operation": "54x54 Depth32Float four-sample buffer upload"
+  },
+  "owner_regressions": {
+    "before_patch_depth_case_pass": false,
+    "after_patch_depth_case_pass": true,
+    "depth_patterns_checked": 32,
+    "identity_gate_test_pass": true,
+    "supported_color_cases_passed": 22,
+    "color_cases_not_supported": 10,
+    "gpu_test_functions_passed": 3,
+    "command": "bash setup/83-test-intel-depth.sh",
+    "rustfmt_pass": true,
+    "clippy_scope": "cargo clippy --release -p metal2vulkan-runtime --lib -- -D warnings, with --cfg m2v_gpu -Dwarnings",
+    "clippy_pass": true,
+    "general_fragment_depth_probe": "Not executed: local LLVM 18 assembler cannot parse captures(none)"
+  },
+  "beta_runs": [
+    {
+      "run": "run-GfjP3AnY",
+      "qemu_sha256": "99e5d963656fb2a1e3e646207924e76dd340b7610bc3c2d392b8246d74911548",
+      "validation_layer_loaded": false,
+      "metal_compute_render_pass": true,
+      "gui_default_metal_pass": true,
+      "java2d_palette_input_pass": true,
+      "lightedit_input_save_pass": true,
+      "lightedit_visual_pass": true,
+      "scroll_visual_verified": false,
+      "browser": {
+        "pass": false,
+        "elapsed_seconds": 469.75,
+        "kernel_panic": false,
+        "health_samples": 16,
+        "browser_reports": 210,
+        "browser_probe_sha256": "09e0595abb5f30c22a6f30b411e98c961829861bc43ba715b447096a09251ba3"
+      },
+      "kernel_gpu_hangs": [
+        {
+          "journal_realtime_us": "1791791964730354",
+          "ecode": "12:1:859ffffb"
+        }
+      ],
+      "qemu_exit_code": 134,
+      "failure": "Vulkan device lost after host i915 GPU HANG; cause unresolved"
+    },
+    {
+      "run": "run-YwDEaswt",
+      "qemu_sha256": "7e532ec7d654db064cfbcdd2bc8b0224154d1010b38630dad39f6387f6af45fa",
+      "validation_layer_loaded": true,
+      "validation_layer_version": "1.3.275",
+      "layer_message_capture_verified": false,
+      "metal_compute_render_pass": true,
+      "gui_default_metal_pass": true,
+      "java2d_pre_stress_pass": true,
+      "java2d_post_stress_pass": true,
+      "lightedit_pre_stress_input_save_pass": true,
+      "lightedit_pre_stress_visual_pass": true,
+      "observed_scroll_first_lines": [
+        1,
+        48
+      ],
+      "ide_jvm_properties": {
+        "java.runtime.version": "25.0.3+9-b508.16",
+        "sun.java2d.metal": "true"
+      },
+      "lightedit_post_stress_retry": "Blocked: non-explicit LightEdit launch was interpreted as project open; restored project showed an expired-subscription dialog. No typing or subscription change was performed. Final verifier now explicitly requests -e.",
+      "browser": {
+        "pass": true,
+        "elapsed_seconds": 600.41,
+        "kernel_panic": false,
+        "health_samples": 21,
+        "browser_reports": 298,
+        "browser_probe_sha256": "09e0595abb5f30c22a6f30b411e98c961829861bc43ba715b447096a09251ba3"
+      },
+      "kernel_gpu_hangs_during_measured_interval": [],
+      "qemu_exit_code": 0,
+      "shutdown": "Clean guest shutdown observed in serial log and QEMU exit"
+    },
+    {
+      "run": "run-0RBftFdT",
+      "qemu_sha256": "7e532ec7d654db064cfbcdd2bc8b0224154d1010b38630dad39f6387f6af45fa",
+      "validation_layer_loaded": false,
+      "explicit_lightedit_launch": "open -na IntelliJ IDEA.app --args -e <authored-file>",
+      "lightedit_input_save_pass": true,
+      "lightedit_visual_pass": true,
+      "observed_scroll_first_lines": [
+        1,
+        48
+      ],
+      "visual_capture_hashes": {
+        "window-20261012-165308.png": "f4d6ded9edcfb8516536ca92b2f428bc60bee7727b80366e1067a065c8c1c310",
+        "window-20261012-165314.png": "f6fe425cf2b93312ab01dc1607d1246fccb484b3a1f41524eb98922ef2b3c96e",
+        "window-20261012-165319.png": "89b38dde36dfd75433f3e900a940895abccf10da308c82f2ff2cf6c3b1d7b9fc"
+      },
+      "browser_stress_repeated": false,
+      "java2d_palette_input_pass": true,
+      "java2d_metal_pipeline": true,
+      "qemu_exit_code": 0,
+      "shutdown": "Clean guest shutdown observed in serial log and QEMU exit"
+    }
+  ],
+  "project_tests": {
+    "command": "python3 -m unittest discover -s tests -q",
+    "tests_passed": 52,
+    "bash_syntax_pass": true,
+    "python_compile_pass": true
+  },
+  "conclusion": {
+    "lightedit_painting_fixed_in_tested_beta_candidate": true,
+    "daily_use_accepted": false,
+    "beta_enabled_by_default": false,
+    "causal_scope": "Whole upstream Beta rewrite plus measured local depth compatibility path; not an isolated Alpha rendering defect fix",
+    "remaining": [
+      "Host GPU HANG/device-loss cause unresolved",
+      "Vulkan layer messages are dropped by the pinned upstream callback relay; empty VUID counts do not prove clean validation",
+      "Project indexing, builds and debugging not accepted",
+      "No displayed FPS, video-decoding or multi-hour stability claim"
+    ]
+  },
+  "privacy": "No VM credentials, disks, guest shader bytes, raw kernel dumps or raw screenshots included",
+  "test_source_sha256": {
+    "setup/probes/SwingRenderProbe.java": "54f87408a4224b7b7d34d1d17ad8aa8b03c3936cd6198d4a7a1270897b94fdca",
+    "setup/probes/ide-window.m": "32326ec83005a89eb9169cf02aba394eefd8832e27492506fc3d67d384a31504",
+    "setup/79-verify-intellij.py": "14d74ed110ec5c3020ff61f98284c6db33b81b1aaf8e3a5ef13c574eaab3630b"
+  }
+}

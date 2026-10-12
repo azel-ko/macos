@@ -12,14 +12,7 @@ def git(path, *arguments):
                           capture_output=True).stdout
 
 
-def prepare(root=ROOT):
-    pins = json.loads((root / "conf/reims.lock").read_text())
-    source = root / "vendor/reims-vgpu"
-    for path, key in [(source, "reims_vgpu"), (source / "vendor/qemu", "qemu")]:
-        actual = git(path, "rev-parse", "HEAD").decode().strip()
-        if actual != pins[key]:
-            raise RuntimeError(f"{path}: expected {pins[key]}, found {actual}; refusing unpinned build")
-    patch = root / pins["local_patch"]
+def apply_project_patch(source, patch):
     expected = patch.read_bytes()
     if not expected:
         raise RuntimeError("Empty Reims source patch")
@@ -33,6 +26,24 @@ def prepare(root=ROOT):
     if git(source, "diff", "HEAD", "--full-index", "--binary") != expected:
         raise RuntimeError("Applied source differs from the declared patch")
     return "Project patch applied"
+
+
+def prepare(root=ROOT, pin_file="conf/reims.lock", source_dir="vendor/reims-vgpu"):
+    pins = json.loads((root / pin_file).read_text())
+    source = root / source_dir
+    for path, key in [(source, "reims_vgpu"), (source / "vendor/qemu", "qemu")]:
+        actual = git(path, "rev-parse", "HEAD").decode().strip()
+        if actual != pins[key]:
+            raise RuntimeError(f"{path}: expected {pins[key]}, found {actual}; refusing unpinned build")
+    return apply_project_patch(source, root / pins["local_patch"])
+
+
+def prepare_translator(root, pins):
+    source = root / "vendor/metal2vulkan-beta"
+    actual = git(source, "rev-parse", "HEAD").decode().strip()
+    if actual != pins["metal2vulkan"]:
+        raise RuntimeError(f"Unpinned metal2vulkan source: {actual}")
+    return apply_project_patch(source, root / pins["metal2vulkan_patch"])
 
 
 if __name__ == "__main__":
